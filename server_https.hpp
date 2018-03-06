@@ -21,16 +21,35 @@ namespace SimpleWeb {
     bool set_session_id_context = false;
 
   public:
-    Server(const std::string &cert_file, const std::string &private_key_file, const std::string &verify_file = std::string())
-        : ServerBase<HTTPS>::ServerBase(443), context(asio::ssl::context::tlsv12) {
-      context.use_certificate_chain_file(cert_file);
+    Server(const std::string &cert_file, const std::string &private_key_file, const std::string &verify_file = std::string(), const std::string& dh_file = std::string(), const std::string& cipher_list = std::string())
+        : ServerBase<HTTPS>::ServerBase(443), context(asio::ssl::context::sslv23) {
+
+      context.set_options(asio::ssl::context::no_sslv2 | asio::ssl::context::no_sslv3);
+      context.use_certificate_file(cert_file, asio::ssl::context::pem);
       context.use_private_key_file(private_key_file, asio::ssl::context::pem);
 
       if(verify_file.size() > 0) {
         context.load_verify_file(verify_file);
-        context.set_verify_mode(asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert | asio::ssl::verify_client_once);
+        //context.set_verify_mode(asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert | asio::ssl::verify_client_once);
         set_session_id_context = true;
       }
+
+      if (dh_file.size() > 0) {
+        context.use_tmp_dh_file(dh_file);
+        SSL_CTX_set_options(context.native_handle(), SSL_OP_SINGLE_DH_USE);
+      }
+
+      EC_KEY *ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+      if (ecdh != NULL) /* error */
+        SSL_CTX_set_tmp_ecdh(context.native_handle(), ecdh);
+      EC_KEY_free(ecdh); /* Safe because of reference counts */
+
+      //set custom cipher list
+      if (cipher_list.size() > 0) {
+        SSL_CTX_set_cipher_list(context.native_handle(), cipher_list.c_str());
+        SSL_CTX_set_options(context.native_handle(), SSL_OP_CIPHER_SERVER_PREFERENCE);
+      }
+
     }
 
     void start() override {
