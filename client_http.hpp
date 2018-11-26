@@ -16,19 +16,16 @@ namespace SimpleWeb {
   using errc = std::errc;
   using system_error = std::system_error;
   namespace make_error_code = std;
-  using string_view = const std::string &; // TODO c++17: use std::string_view
 } // namespace SimpleWeb
 #else
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <boost/utility/string_ref.hpp>
 namespace SimpleWeb {
   namespace asio = boost::asio;
   using error_code = boost::system::error_code;
   namespace errc = boost::system::errc;
   using system_error = boost::system::system_error;
   namespace make_error_code = boost::system::errc;
-  using string_view = boost::string_ref;
 } // namespace SimpleWeb
 #endif
 
@@ -49,9 +46,11 @@ namespace SimpleWeb {
       /// Convenience function to return std::string. The stream buffer is consumed.
       std::string string() noexcept {
         try {
-          std::stringstream ss;
-          ss << rdbuf();
-          return ss.str();
+          std::string str;
+          auto size = streambuf.size();
+          str.resize(size);
+          read(&str[0], static_cast<std::streamsize>(size));
+          return str;
         }
         catch(...) {
           return std::string();
@@ -101,8 +100,8 @@ namespace SimpleWeb {
     class Connection : public std::enable_shared_from_this<Connection> {
     public:
       template <typename... Args>
-      Connection(std::shared_ptr<ScopeRunner> handler_runner, long timeout, Args &&... args) noexcept
-          : handler_runner(std::move(handler_runner)), timeout(timeout), socket(new socket_type(std::forward<Args>(args)...)) {}
+      Connection(std::shared_ptr<ScopeRunner> handler_runner_, long timeout, Args &&... args) noexcept
+          : handler_runner(std::move(handler_runner_)), timeout(timeout), socket(new socket_type(std::forward<Args>(args)...)) {}
 
       std::shared_ptr<ScopeRunner> handler_runner;
       long timeout;
@@ -141,8 +140,8 @@ namespace SimpleWeb {
 
     class Session {
     public:
-      Session(std::size_t max_response_streambuf_size, std::shared_ptr<Connection> connection, std::unique_ptr<asio::streambuf> request_streambuf) noexcept
-          : connection(std::move(connection)), request_streambuf(std::move(request_streambuf)), response(new Response(max_response_streambuf_size)) {}
+      Session(std::size_t max_response_streambuf_size, std::shared_ptr<Connection> connection_, std::unique_ptr<asio::streambuf> request_streambuf_) noexcept
+          : connection(std::move(connection_)), request_streambuf(std::move(request_streambuf_)), response(new Response(max_response_streambuf_size)) {}
 
       std::shared_ptr<Connection> connection;
       std::unique_ptr<asio::streambuf> request_streambuf;
@@ -269,19 +268,19 @@ namespace SimpleWeb {
     /// Asynchronous request where setting and/or running Client's io_service is required.
     /// Do not use concurrently with the synchronous request functions.
     void request(const std::string &method, const std::string &path, string_view content,
-                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback) {
-      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
+                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback_) {
+      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback_));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     void request(const std::string &method, const std::string &path,
-                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback) {
-      request(method, path, std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
+                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback_) {
+      request(method, path, std::string(), CaseInsensitiveMultimap(), std::move(request_callback_));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
-    void request(const std::string &method, std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback) {
-      request(method, std::string("/"), std::string(), CaseInsensitiveMultimap(), std::move(request_callback));
+    void request(const std::string &method, std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback_) {
+      request(method, std::string("/"), std::string(), CaseInsensitiveMultimap(), std::move(request_callback_));
     }
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
@@ -337,8 +336,8 @@ namespace SimpleWeb {
 
     /// Asynchronous request where setting and/or running Client's io_service is required.
     void request(const std::string &method, const std::string &path, std::istream &content,
-                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback) {
-      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback));
+                 std::function<void(std::shared_ptr<Response>, const error_code &)> &&request_callback_) {
+      request(method, path, content, CaseInsensitiveMultimap(), std::move(request_callback_));
     }
 
     /// Close connections
@@ -389,7 +388,7 @@ namespace SimpleWeb {
       }
 
       for(auto it = connections.begin(); it != connections.end(); ++it) {
-        if(!(*it)->in_use && !connection) {
+        if(!(*it)->in_use) {
           connection = *it;
           break;
         }
@@ -413,6 +412,20 @@ namespace SimpleWeb {
       return connection;
     }
 
+    std::pair<std::string, unsigned short> parse_host_port(const std::string &host_port, unsigned short default_port) const noexcept {
+      std::pair<std::string, unsigned short> parsed_host_port;
+      std::size_t host_end = host_port.find(':');
+      if(host_end == std::string::npos) {
+        parsed_host_port.first = host_port;
+        parsed_host_port.second = default_port;
+      }
+      else {
+        parsed_host_port.first = host_port.substr(0, host_end);
+        parsed_host_port.second = static_cast<unsigned short>(stoul(host_port.substr(host_end + 1)));
+      }
+      return parsed_host_port;
+    }
+
     virtual std::shared_ptr<Connection> create_connection() noexcept = 0;
     virtual void connect(const std::shared_ptr<Session> &) = 0;
 
@@ -433,20 +446,6 @@ namespace SimpleWeb {
       for(auto &h : header)
         write_stream << h.first << ": " << h.second << "\r\n";
       return streambuf;
-    }
-
-    std::pair<std::string, unsigned short> parse_host_port(const std::string &host_port, unsigned short default_port) const noexcept {
-      std::pair<std::string, unsigned short> parsed_host_port;
-      std::size_t host_end = host_port.find(':');
-      if(host_end == std::string::npos) {
-        parsed_host_port.first = host_port;
-        parsed_host_port.second = default_port;
-      }
-      else {
-        parsed_host_port.first = host_port.substr(0, host_end);
-        parsed_host_port.second = static_cast<unsigned short>(stoul(host_port.substr(host_end + 1)));
-      }
-      return parsed_host_port;
     }
 
     void write(const std::shared_ptr<Session> &session) {
@@ -488,7 +487,7 @@ namespace SimpleWeb {
             auto content_length = stoull(header_it->second);
             if(content_length > num_additional_bytes) {
               session->connection->set_timeout();
-              asio::async_read(*session->connection->socket, session->response->streambuf, asio::transfer_exactly(content_length - num_additional_bytes), [this, session](const error_code &ec, std::size_t /*bytes_transferred*/) {
+              asio::async_read(*session->connection->socket, session->response->streambuf, asio::transfer_exactly(content_length - num_additional_bytes), [session](const error_code &ec, std::size_t /*bytes_transferred*/) {
                 session->connection->cancel_timeout();
                 auto lock = session->connection->handler_runner->continue_lock();
                 if(!lock)
@@ -513,7 +512,7 @@ namespace SimpleWeb {
           }
           else if(session->response->http_version < "1.1" || ((header_it = session->response->header.find("Session")) != session->response->header.end() && header_it->second == "close")) {
             session->connection->set_timeout();
-            asio::async_read(*session->connection->socket, session->response->streambuf, [this, session](const error_code &ec, std::size_t /*bytes_transferred*/) {
+            asio::async_read(*session->connection->socket, session->response->streambuf, [session](const error_code &ec, std::size_t /*bytes_transferred*/) {
               session->connection->cancel_timeout();
               auto lock = session->connection->handler_runner->continue_lock();
               if(!lock)

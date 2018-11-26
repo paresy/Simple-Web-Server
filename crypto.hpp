@@ -223,5 +223,5 @@ namespace SimpleWeb {
       return key;
     }
   };
-}
+} // namespace SimpleWeb
 #endif /* SIMPLE_WEB_CRYPTO_HPP */
