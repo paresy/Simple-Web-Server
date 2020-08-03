@@ -23,23 +23,23 @@ namespace SimpleWeb {
     /**
      * Constructs a server object.
      *
-     * @param certification_file If non-empty, sends the given certification file to client.
-     * @param private_key_file   Specifies the file containing the private key for certification_file.
-     * @param verify_file        If non-empty, use this certificate authority file to perform verification of client's certificate and hostname according to RFC 2818.
+     * @param certificate               If non-empty, sends the given certificate to client.
+     * @param private_key               Specifies the private key for certification.
+     * @param certificate_authority     If non-empty, use this certificate authority to perform verification of client's certificate and hostname according to RFC 2818.
+     * @param dh                        If non-empty, use this dh parameters
      */
-    Server(const std::string &certification_file, const std::string &private_key_file, const std::string &verify_file = std::string(), const std::string& dh_file = std::string(), const std::string& cipher_list = std::string())
+    Server(const std::string &certificate, const std::string &private_key, const std::string &certificate_authority = std::string(), const std::string& dh = std::string(), const std::string& cipher_list = std::string())
         : ServerBase<HTTPS>::ServerBase(443), context(asio::ssl::context::sslv23) {
-      context.use_certificate_file(certification_file, asio::ssl::context::pem);
-      context.use_private_key_file(private_key_file, asio::ssl::context::pem);
+      context.use_certificate(asio::buffer(certificate), asio::ssl::context::pem);
+      context.use_private_key(asio::buffer(private_key), asio::ssl::context::pem);
 
-      if(verify_file.size() > 0) {
-        context.load_verify_file(verify_file);
-        //context.set_verify_mode(asio::ssl::verify_peer | asio::ssl::verify_fail_if_no_peer_cert | asio::ssl::verify_client_once);
+      if(certificate_authority.size() > 0) {
+        context.add_certificate_authority(asio::buffer(certificate_authority));
         set_session_id_context = true;
       }
 
-      if (dh_file.size() > 0) {
-        context.use_tmp_dh_file(dh_file);
+      if (dh.size() > 0) {
+        context.use_tmp_dh(asio::buffer(dh));
         SSL_CTX_set_options(context.native_handle(), SSL_OP_SINGLE_DH_USE);
       }
 
