@@ -29,7 +29,7 @@ namespace SimpleWeb {
      * @param dh                        If non-empty, use this dh parameters
      */
     Server(const std::string &certificate, const std::string &private_key, const std::string &certificate_authority = std::string(), const std::string& dh = std::string(), const std::string& cipher_list = std::string())
-        : ServerBase<HTTPS>::ServerBase(443), context(asio::ssl::context::sslv23) {
+        : ServerBase<HTTPS>::ServerBase(443), context(asio::ssl::context::tlsv12) {
       context.use_certificate(asio::buffer(certificate), asio::ssl::context::pem);
       context.use_private_key(asio::buffer(private_key), asio::ssl::context::pem);
 
