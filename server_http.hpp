@@ -231,14 +231,9 @@ namespace SimpleWeb {
       /// The time point when the request header was fully read.
       std::chrono::system_clock::time_point header_read_time;
 
-      asio::ip::tcp::endpoint remote_endpoint() const noexcept {
-        try {
-          if(auto connection = this->connection.lock())
-            return connection->socket->lowest_layer().remote_endpoint();
-        }
-        catch(...) {
-        }
-        return asio::ip::tcp::endpoint();
+      const asio::ip::tcp::endpoint& remote_endpoint() const noexcept {
+        if(auto connection = this->connection.lock())
+          return connection->endpoint;
       }
 
       asio::ip::tcp::endpoint local_endpoint() const noexcept {
@@ -313,6 +308,8 @@ namespace SimpleWeb {
 
       std::unique_ptr<asio::steady_timer> timer;
 
+      asio::ip::tcp::endpoint endpoint; // The endpoint must be stored so that it can be read reliably in all handlers, including on_error
+
       void close() noexcept {
         error_code ec;
         socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, ec);
@@ -348,7 +345,13 @@ namespace SimpleWeb {
 
     class Session {
     public:
-      Session(std::size_t max_request_streambuf_size, std::shared_ptr<Connection> connection_) noexcept : connection(std::move(connection_)), request(new Request(max_request_streambuf_size, connection)) {}
+      Session(std::size_t max_request_streambuf_size, std::shared_ptr<Connection> connection_) noexcept : connection(std::move(connection_)), request(new Request(max_request_streambuf_size, connection)) {
+        try {
+          connection->endpoint = connection->socket->lowest_layer().remote_endpoint();
+        }
+        catch (...) {
+        }
+      }
 
       std::shared_ptr<Connection> connection;
       std::shared_ptr<Request> request;
