@@ -231,9 +231,14 @@ namespace SimpleWeb {
       /// The time point when the request header was fully read.
       std::chrono::system_clock::time_point header_read_time;
 
-      const asio::ip::tcp::endpoint& remote_endpoint() const noexcept {
-        if(auto connection = this->connection.lock())
-          return connection->endpoint;
+      asio::ip::tcp::endpoint remote_endpoint() const noexcept {
+        try {
+          if(auto connection = this->connection.lock())
+            return connection->endpoint;
+        }
+        catch(...) {
+        }
+        return asio::ip::tcp::endpoint();
       }
 
       asio::ip::tcp::endpoint local_endpoint() const noexcept {
