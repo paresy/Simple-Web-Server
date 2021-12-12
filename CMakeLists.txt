@@ -1,6 +1,6 @@
-cmake_minimum_required (VERSION 3.0)
+cmake_minimum_required(VERSION 3.0)
 
-project (Simple-Web-Server)
+project(Simple-Web-Server)
 
 option(USE_STANDALONE_ASIO "set ON to use standalone Asio instead of Boost.Asio" OFF)
 if(CMAKE_SOURCE_DIR STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -21,7 +21,7 @@ target_link_libraries(simple-web-server INTERFACE ${CMAKE_THREAD_LIBS_INIT})
 # TODO 2020 when Debian Jessie LTS ends:
 # Remove Boost system, thread, regex components; use Boost::<component> aliases; remove Boost target_include_directories
 if(USE_STANDALONE_ASIO)
-    target_compile_definitions(simple-web-server INTERFACE USE_STANDALONE_ASIO)
+    target_compile_definitions(simple-web-server INTERFACE ASIO_STANDALONE)
     find_path(ASIO_PATH asio.hpp)
     if(NOT ASIO_PATH)
         message(FATAL_ERROR "Standalone Asio not found")
