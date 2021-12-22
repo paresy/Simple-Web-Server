@@ -520,6 +520,11 @@ namespace SimpleWeb {
       }
     }
 
+    std::size_t connection_count() {
+      LockGuard lock(connections->mutex);
+      return connections->set.size();
+    }
+
     virtual ~ServerBase() noexcept {
       handler_runner->stop();
       stop();
