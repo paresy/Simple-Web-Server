@@ -74,6 +74,7 @@ namespace SimpleWeb {
 
       void send_from_queue() REQUIRES(send_queue_mutex) {
         auto self = this->shared_from_this();
+        session->connection->set_timeout(this->timeout_content);
         asio::async_write(*self->session->connection->socket, *send_queue.begin()->first, [self](const error_code &ec, std::size_t /*bytes_transferred*/) {
           auto lock = self->session->connection->handler_runner->continue_lock();
           if(!lock)
@@ -110,6 +111,7 @@ namespace SimpleWeb {
 
       void send_on_delete(const std::function<void(const error_code &)> &callback = nullptr) noexcept {
         auto self = this->shared_from_this(); // Keep Response instance alive through the following async_write
+        session->connection->set_timeout(this->timeout_content);
         asio::async_write(*session->connection->socket, *streambuf, [self, callback](const error_code &ec, std::size_t /*bytes_transferred*/) {
           auto lock = self->session->connection->handler_runner->continue_lock();
           if(!lock)
