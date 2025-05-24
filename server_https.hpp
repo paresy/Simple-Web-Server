@@ -52,10 +52,15 @@ namespace SimpleWeb {
         SSL_CTX_set_options(context.native_handle(), SSL_OP_SINGLE_DH_USE);
       }
 
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+      // OpenSSL 1.1.0 or later: use modern API
+      SSL_CTX_set1_groups_list(context.native_handle(), "P-256");
+#else
       EC_KEY *ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
       if (ecdh != NULL) /* error */
         SSL_CTX_set_tmp_ecdh(context.native_handle(), ecdh);
       EC_KEY_free(ecdh); /* Safe because of reference counts */
+#endif
 
       //set custom cipher list
       if (cipher_list.size() > 0) {
