@@ -28,7 +28,7 @@ namespace SimpleWeb {
      * @param certificate_authority     If non-empty, use this certificate authority to perform verification of client's certificate and hostname according to RFC 2818.
      * @param dh                        If non-empty, use this dh parameters
      */
-    Server(const std::string &certificate, const std::string &private_key, const std::string &certificate_authority = std::string(), const std::string& dh = std::string(), const std::string& cipher_list = std::string())
+    Server(const std::string &certificate, const std::string &private_key, const std::string &password = std::string(), const std::string &certificate_authority = std::string(), const std::string& dh = std::string(), const std::string& cipher_list = std::string())
         : ServerBase<HTTPS>::ServerBase(443),
 #if(ASIO_STANDALONE && ASIO_VERSION >= 101300) || BOOST_ASIO_VERSION >= 101300
           context(asio::ssl::context::tls_server) {
@@ -38,6 +38,12 @@ namespace SimpleWeb {
 #else
           context(asio::ssl::context::tlsv12) {
 #endif
+
+      if (password.size() > 0) {
+        context.set_password_callback([password](std::size_t max_length, asio::ssl::context::password_purpose purpose) -> std::string {
+          return password;
+        });
+      }
 
       context.use_certificate(asio::buffer(certificate), asio::ssl::context::pem);
       context.use_private_key(asio::buffer(private_key), asio::ssl::context::pem);
