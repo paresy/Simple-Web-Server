@@ -9,6 +9,14 @@
 #include <boost/asio/ssl.hpp>
 #endif
 
+#if defined(ASIO_VERSION) && ASIO_VERSION < 102000
+#include <asio/ssl/rfc2818_verification.hpp>
+using tls_verify = asio::ssl::rfc2818_verification;
+#else
+#include <asio/ssl/host_name_verification.hpp>
+using tls_verify = asio::ssl::host_name_verification;
+#endif
+
 namespace SimpleWeb {
   using HTTPS = asio::ssl::stream<asio::ip::tcp::socket>;
 
@@ -41,7 +49,7 @@ namespace SimpleWeb {
       }
 
       if(verify_certificate)
-        context.set_verify_callback(asio::ssl::rfc2818_verification(host));
+        context.set_verify_callback(tls_verify(host));
 
       if(verify_file.size() > 0)
         context.load_verify_file(verify_file);
